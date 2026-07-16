@@ -280,14 +280,28 @@ new GLTFLoader().load('lighthouse.glb',
       m.needsUpdate=true;
     });
 
-    // model is Y-up already (height ~2500 along Y). scale to ~150 units tall, sit on y=0.
-    root.rotation.y=Math.PI;                       // face the lit side toward camera/moon
-    let box=new THREE.Box3().setFromObject(root);const size=new THREE.Vector3();box.getSize(size);
+    // GLTF export already converts Blender's Z-up to Y-up, but this particular
+    // model comes out vertically inverted (finial pointing down) — flip it upright.
+    root.rotation.x = Math.PI;
+
+    let box=new THREE.Box3().setFromObject(root);
+    let size=new THREE.Vector3();box.getSize(size);
     root.scale.setScalar(150/size.y);
-    box=new THREE.Box3().setFromObject(root);const c=new THREE.Vector3();box.getCenter(c);
-    root.position.x-=c.x;root.position.z-=c.z;
-    root.position.y-=box.min.y;
+
+    box=new THREE.Box3().setFromObject(root);
+    const c=new THREE.Vector3();box.getCenter(c);
+    root.position.x-=c.x;
+    root.position.z-=c.z;
+    root.position.y-=box.min.y;          // sit the base on y=0
     scene.add(root);
+
+    // sanity flip: if the tallest point ends up BELOW the base point, the model is inverted
+    const check=new THREE.Box3().setFromObject(root);
+    if (check.max.y < 10) {                          // basically flat/inverted -> flip
+      root.rotation.x += Math.PI;
+      const b2=new THREE.Box3().setFromObject(root);
+      root.position.y -= b2.min.y;
+    }
 
     // warm point light at the lantern so it casts light onto the sea & gallery
     const top=new THREE.Box3().setFromObject(root).max.y;
