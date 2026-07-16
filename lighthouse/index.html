@@ -63,99 +63,55 @@ controls.minDistance=90;controls.maxDistance=600;
   scene.add(new THREE.Mesh(g,m));
 }
 
-/* ---------- moon: real geometry-lit sphere with bump-mapped craters ---------- */
+/* ---------- moon: a bright storybook moon, immune to tone mapping ---------- */
 const MOONPOS=new THREE.Vector3(-780,430,-1050);
 {
-  // soft outer halo (atmospheric glow only — the disc itself is lit, not emissive)
+  // warm halo, large and soft, additive so it never darkens
+  function radial(stops,size=256){
+    const cv=document.createElement('canvas');cv.width=cv.height=size;
+    const x=cv.getContext('2d');const g=x.createRadialGradient(size/2,size/2,0,size/2,size/2,size/2);
+    stops.forEach(([o,c])=>g.addColorStop(o,c));
+    x.fillStyle=g;x.fillRect(0,0,size,size);return new THREE.CanvasTexture(cv);
+  }
   const halo=new THREE.Sprite(new THREE.SpriteMaterial({
-    transparent:true,opacity:0.4,depthWrite:false,blending:THREE.AdditiveBlending,
-    map:(()=>{const cv=document.createElement('canvas');cv.width=cv.height=256;
-      const x=cv.getContext('2d');const gr=x.createRadialGradient(128,128,0,128,128,128);
-      gr.addColorStop(0,'rgba(255,240,190,1.0)');gr.addColorStop(0.22,'rgba(255,226,150,0.6)');
-      gr.addColorStop(1,'rgba(255,244,214,0)');
-      x.fillStyle=gr;x.fillRect(0,0,256,256);return new THREE.CanvasTexture(cv);})()
+    map:radial([[0,'rgba(255,240,190,0.9)'],[0.3,'rgba(255,224,140,0.4)'],[1,'rgba(255,224,140,0)']]),
+    transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false
   }));
-  halo.scale.set(920,920,1);halo.position.copy(MOONPOS);scene.add(halo);
-  const core=new THREE.Sprite(new THREE.SpriteMaterial({
-    transparent:true,opacity:0.7,depthWrite:false,blending:THREE.AdditiveBlending,
-    map:(()=>{const cv=document.createElement('canvas');cv.width=cv.height=128;
-      const x=cv.getContext('2d');const g2=x.createRadialGradient(64,64,0,64,64,64);
-      g2.addColorStop(0,'rgba(255,248,220,0.95)');g2.addColorStop(0.5,'rgba(255,236,170,0.4)');
-      g2.addColorStop(1,'rgba(255,236,170,0)');
-      x.fillStyle=g2;x.fillRect(0,0,128,128);return new THREE.CanvasTexture(cv);})()
-  }));
-  core.scale.set(230,230,1);core.position.copy(MOONPOS);scene.add(core);
+  halo.scale.set(1000,1000,1);halo.position.copy(MOONPOS);scene.add(halo);
 
-  // build a large-canvas colour map + matching bump map so craters actually catch light
+  // the moon face: colour map with craters painted directly as light/dark tints (no lighting needed)
   const SZ=1024;
-  const colCv=document.createElement('canvas');colCv.width=colCv.height=SZ;
-  const bumpCv=document.createElement('canvas');bumpCv.width=bumpCv.height=SZ;
-  const cx2=colCv.getContext('2d'), bx2=bumpCv.getContext('2d');
-
-  cx2.fillStyle='#f7e08a';cx2.fillRect(0,0,SZ,SZ);   // warm golden base
-  bx2.fillStyle='#808080';bx2.fillRect(0,0,SZ,SZ);   // neutral grey = no height
-
-  // large maria (broad dark plains) — colour only, very subtle
-  for(let i=0;i<9;i++){
-    const r=SZ*(0.06+Math.random()*0.12), gx=Math.random()*SZ, gy=Math.random()*SZ;
-    const g=cx2.createRadialGradient(gx,gy,0,gx,gy,r);
-    g.addColorStop(0,`rgba(150,145,132,${0.16+Math.random()*0.12})`);
-    g.addColorStop(1,'rgba(150,145,132,0)');
-    cx2.fillStyle=g;cx2.beginPath();cx2.arc(gx,gy,r,0,7);cx2.fill();
+  const cv=document.createElement('canvas');cv.width=cv.height=SZ;const x=cv.getContext('2d');
+  // bright warm base
+  x.fillStyle='#ffe9a3';x.fillRect(0,0,SZ,SZ);
+  // broad maria (soft darker plains)
+  for(let i=0;i<10;i++){
+    const r=SZ*(0.06+Math.random()*0.13),gx=Math.random()*SZ,gy=Math.random()*SZ;
+    const g=x.createRadialGradient(gx,gy,0,gx,gy,r);
+    g.addColorStop(0,`rgba(226,196,120,${0.18+Math.random()*0.16})`);
+    g.addColorStop(1,'rgba(226,196,120,0)');
+    x.fillStyle=g;x.beginPath();x.arc(gx,gy,r,0,7);x.fill();
   }
-
-  // craters: each gets a dark rim-lit ring in the bump map (real relief) + faint colour
-  function crater(x,y,r){
-    // bump: raised rim, depressed floor -> reads as a real pit under directional light
-    const rim=bx2.createRadialGradient(x,y,r*0.55,x,y,r*1.05);
-    rim.addColorStop(0,'rgba(60,60,60,1)');     // floor: lower
-    rim.addColorStop(0.75,'rgba(60,60,60,1)');
-    rim.addColorStop(0.86,'rgba(235,235,235,1)'); // rim: raised, bright in bump map
-    rim.addColorStop(1,'rgba(128,128,128,1)');
-    bx2.fillStyle=rim;bx2.beginPath();bx2.arc(x,y,r*1.05,0,7);bx2.fill();
-
-    // colour: faint darker floor, faint bright rim
-    cx2.fillStyle='rgba(120,114,102,0.22)';
-    cx2.beginPath();cx2.arc(x,y,r*0.8,0,7);cx2.fill();
-    cx2.strokeStyle='rgba(232,226,210,0.28)';
-    cx2.lineWidth=Math.max(1,r*0.12);
-    cx2.beginPath();cx2.arc(x,y,r*0.95,0,7);cx2.stroke();
+  // craters: darker floor + bright rim, painted (reads as relief without any light)
+  function crater(cx3,cy3,r){
+    x.fillStyle='rgba(198,168,96,0.35)';
+    x.beginPath();x.arc(cx3,cy3,r*0.8,0,7);x.fill();
+    x.strokeStyle='rgba(255,247,214,0.5)';x.lineWidth=Math.max(1,r*0.14);
+    x.beginPath();x.arc(cx3,cy3,r*0.9,0,7);x.stroke();
   }
-  // scatter craters across a range of sizes (small ones = fine surface noise)
-  for(let i=0;i<26;i++) crater(Math.random()*SZ,Math.random()*SZ, SZ*(0.02+Math.random()*0.045));
-  for(let i=0;i<70;i++) crater(Math.random()*SZ,Math.random()*SZ, SZ*(0.006+Math.random()*0.014));
-  // fine grain speckle in the bump map for a rough, non-plastic surface
-  const speck=bx2.getImageData(0,0,SZ,SZ);
-  for(let p=0;p<speck.data.length;p+=4){
-    const n=(Math.random()-0.5)*22;
-    speck.data[p]=speck.data[p+1]=speck.data[p+2]=Math.min(255,Math.max(0,speck.data[p]+n));
-  }
-  bx2.putImageData(speck,0,0);
+  for(let i=0;i<24;i++) crater(Math.random()*SZ,Math.random()*SZ,SZ*(0.02+Math.random()*0.05));
+  for(let i=0;i<70;i++) crater(Math.random()*SZ,Math.random()*SZ,SZ*(0.006+Math.random()*0.014));
+  // gentle limb darkening at the very edge so it reads as a sphere, not a flat coin
+  const ld=x.createRadialGradient(SZ/2,SZ/2,SZ*0.34,SZ/2,SZ/2,SZ*0.5);
+  ld.addColorStop(0,'rgba(0,0,0,0)');ld.addColorStop(1,'rgba(120,90,30,0.35)');
+  x.fillStyle=ld;x.fillRect(0,0,SZ,SZ);
 
-  const colTex=new THREE.CanvasTexture(colCv);
-  const bumpTex=new THREE.CanvasTexture(bumpCv);
-  colTex.anisotropy=8;bumpTex.anisotropy=8;
-
-  const moonMat=new THREE.MeshStandardMaterial({
-    map:colTex,bumpMap:bumpTex,bumpScale:1.5,
-    color:0xfff0c0,                        // bright warm cream
-    emissive:0xffe38a,emissiveIntensity:1.15,   // strong self-glow -> clearly luminous
-    roughness:0.9,metalness:0.0,
-    toneMapped:false                        // keep it from being dimmed by tone mapping
-  });
-  const moon=new THREE.Mesh(new THREE.SphereGeometry(52,96,96),moonMat);
-  moon.position.copy(MOONPOS);
-  // orient a visible face toward the scene, lit by its own dedicated light below
-  scene.add(moon);
-
-  // the moon needs its OWN light so it shows real terminator/shading regardless of scene light angle
-  const moonKey=new THREE.DirectionalLight(0xfff0b0,3.4);  // strong warm key
-  moonKey.position.set(MOONPOS.x+120,MOONPOS.y+90,MOONPOS.z+700);  // more head-on so the face is bright, slight offset keeps relief
-  moonKey.target.position.copy(MOONPOS);
-  scene.add(moonKey,moonKey.target);
-  // faint fill so the dark side isn't pure black
-  const moonFill=new THREE.AmbientLight(0x1a2230,0.6);
-  // (kept local in effect via low intensity global ambient already present)
+  const tex=new THREE.CanvasTexture(cv);tex.anisotropy=8;
+  const moon=new THREE.Mesh(
+    new THREE.SphereGeometry(58,64,64),
+    new THREE.MeshBasicMaterial({map:tex,toneMapped:false})   // basic = shows its own colour, always bright
+  );
+  moon.position.copy(MOONPOS);scene.add(moon);
 }
 
 /* ---------- lights (brighter surroundings) ---------- */
