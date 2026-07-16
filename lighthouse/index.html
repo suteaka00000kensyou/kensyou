@@ -14,6 +14,11 @@
 <body>
 <canvas id="c"></canvas>
 <div id="err"></div>
+<div id="start" style="position:fixed;inset:0;display:grid;place-items:center;
+     background:rgba(5,8,13,.55);cursor:pointer;font-family:system-ui,sans-serif;
+     color:#eee;letter-spacing:.14em;font-size:13px;z-index:10">
+  CLICK TO ENTER
+</div>
 
 <script type="importmap">
 { "imports": {
@@ -317,6 +322,128 @@ addEventListener('resize',()=>{
   camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
   renderer.setSize(innerWidth,innerHeight);
 });
-</script>
+
+/* ---------- ambient sea sound (synthesised, no audio files) ---------- */
+let audioStarted=false;
+document.getElementById('start').addEventListener('click', () => {
+  if (audioStarted) return;
+  audioStarted = true;
+  document.getElementById('start').style.display='none';
+  startSea();
+});
+
+function startSea(){
+  const ctx = new (window.AudioContext||window.webkitAudioContext)();
+
+  // real recorded wave audio, looped with a slow fade-in
+  const audio = new Audio('audio/sea.mp3');
+  audio.loop = true;
+  audio.crossOrigin = 'anonymous';
+  audio.volume = 0;
+  audio.play().catch(()=>{});
+
+  // fade the <audio> element's own volume in gently (simplest, most robust path)
+  const target = 0.55;
+  const steps = 40, stepTime = 3000/steps;
+  let i = 0;
+  const fade = setInterval(() => {
+    i++; audio.volume = Math.min(target, target * i/steps);
+    if (i>=steps) clearInterval(fade);
+  }, stepTime);
+
+  scheduleGulls(ctx);
+}
+
+/* ---------- three distinct bird calls, each sweeping left<->right like it's flying past ---------- */
+
+// generic helper: play `fn(t0, pan)` several times while panning smoothly across the stereo field
+function flyBy(ctx, callFn, calls, spanSec){
+  const t0 = ctx.currentTime + 0.3;
+  const startPan = (Math.random()<0.5 ? -1 : 1) * (0.7+Math.random()*0.3);
+  const endPan   = -startPan * (0.7+Math.random()*0.3);
+  for (let i=0;i<calls;i++){
+    const f = i/(Math.max(1,calls-1));
+    const pan = startPan + (endPan-startPan)*f;
+    const t = t0 + f*spanSec + Math.random()*0.15;
+    callFn(ctx, t, pan);
+  }
+}
+
+/* ウミネコ (black-tailed gull): a rougher, mewing "myaa" - noisy formant with pitch dip */
+function umineko(ctx, t0, pan){
+  const dur = 0.5+Math.random()*0.3;
+  const osc = ctx.createOscillator(); osc.type='sawtooth';
+  osc.frequency.setValueAtTime(900+Math.random()*150, t0);
+  osc.frequency.exponentialRampToValueAtTime(600, t0+dur*0.5);
+  osc.frequency.exponentialRampToValueAtTime(750, t0+dur);
+  const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1400; bp.Q.value=2.2;
+  const g=ctx.createGain();
+  g.gain.setValueAtTime(0,t0);
+  g.gain.linearRampToValueAtTime(0.045,t0+dur*0.2);
+  g.gain.linearRampToValueAtTime(0,t0+dur);
+  const pn=ctx.createStereoPanner?ctx.createStereoPanner():null;
+  osc.connect(bp);bp.connect(g);
+  if(pn){pn.pan.value=pan;g.connect(pn);pn.connect(ctx.destination);} else g.connect(ctx.destination);
+  osc.start(t0);osc.stop(t0+dur+0.05);
+}
+
+/* カモメ (herring/common gull): smooth swooping "kyaa-kyaa", pure-ish tone */
+function kamome(ctx, t0, pan){
+  const dur=0.4+Math.random()*0.25;
+  const osc=ctx.createOscillator(); osc.type='sine';
+  const f0=1600+Math.random()*400;
+  osc.frequency.setValueAtTime(f0,t0);
+  osc.frequency.linearRampToValueAtTime(f0+600,t0+dur*0.3);
+  osc.frequency.linearRampToValueAtTime(f0-200,t0+dur);
+  const g=ctx.createGain();
+  g.gain.setValueAtTime(0,t0);
+  g.gain.linearRampToValueAtTime(0.04,t0+dur*0.12);
+  g.gain.linearRampToValueAtTime(0,t0+dur);
+  const pn=ctx.createStereoPanner?ctx.createStereoPanner():null;
+  osc.connect(g);
+  if(pn){pn.pan.value=pan;g.connect(pn);pn.connect(ctx.destination);} else g.connect(ctx.destination);
+  osc.start(t0);osc.stop(t0+dur+0.05);
+}
+
+/* イソヒヨドリ (blue rock thrush): clear, melodic, multi-note whistle - more musical, higher */
+function isohiyodori(ctx, t0){
+  const notes = 3+Math.floor(Math.random()*3);
+  let t=t0;
+  for(let i=0;i<notes;i++){
+    const dur=0.12+Math.random()*0.10;
+    const f0=2200+Math.random()*900;
+    const osc=ctx.createOscillator(); osc.type='sine';
+    osc.frequency.setValueAtTime(f0,t);
+    osc.frequency.exponentialRampToValueAtTime(f0*(0.85+Math.random()*0.3),t+dur);
+    const g=ctx.createGain();
+    g.gain.setValueAtTime(0,t);
+    g.gain.linearRampToValueAtTime(0.032,t+dur*0.2);
+    g.gain.linearRampToValueAtTime(0,t+dur);
+    const pn=ctx.createStereoPanner?ctx.createStereoPanner():null;
+    osc.connect(g);
+    const pan=(Math.random()*1.2-0.6);
+    if(pn){pn.pan.value=pan;g.connect(pn);pn.connect(ctx.destination);} else g.connect(ctx.destination);
+    osc.start(t);osc.stop(t+dur+0.03);
+    t += dur + 0.04 + Math.random()*0.08;
+  }
+}
+
+function scheduleGulls(ctx){
+  function umineceFlock(){
+    flyBy(ctx, umineko, 2+Math.floor(Math.random()*3), 1.8+Math.random()*1.4);
+    setTimeout(umineceFlock, (16+Math.random()*20)*1000);
+  }
+  function kamomeFlock(){
+    flyBy(ctx, kamome, 2+Math.floor(Math.random()*3), 2.0+Math.random()*1.6);
+    setTimeout(kamomeFlock, (20+Math.random()*24)*1000);
+  }
+  function isohiyodoriSong(){
+    isohiyodori(ctx, ctx.currentTime+0.2);
+    setTimeout(isohiyodoriSong, (25+Math.random()*30)*1000);
+  }
+  setTimeout(umineceFlock,  4000+Math.random()*4000);
+  setTimeout(kamomeFlock,   9000+Math.random()*5000);
+  setTimeout(isohiyodoriSong, 14000+Math.random()*6000);
+}</script>
 </body>
 </html>
