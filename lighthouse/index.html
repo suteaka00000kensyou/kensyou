@@ -172,17 +172,27 @@ let sea;
         vec2 u=f*f*(3.-2.*f);
         return mix(mix(a,b,u.x),mix(c,d,u.x),u.y);
       }
-      // fractal brownian motion -> irregular swell
-      float fbm(vec2 p){
+      // fractal brownian motion -> irregular swell; each octave gets its own slight
+      // rotation so the underlying grid of value-noise never lines up into a pattern
+      mat2 rot(float a){float c=cos(a),s2=sin(a);return mat2(c,-s2,s2,c);}
+      float fbm(vec2 p, float rotStep){
         float s=0.,a=0.5;
-        for(int i=0;i<5;i++){s+=a*vnoise(p);p*=2.03;a*=0.5;}
+        for(int i=0;i<5;i++){
+          s+=a*vnoise(p);
+          p=rot(rotStep)*p*2.03 + vec2(17.1,9.3);   // rotate + offset each octave
+          a*=0.5;
+        }
         return s;
       }
       float waveH(vec2 p){
-        float big=sin(p.x*0.010+t*0.7)*2.2 + sin(p.y*0.013-t*0.6)*1.8;      // long swell
-        float mid=fbm(p*0.03+vec2(t*0.35,-t*0.28))*4.5;                     // irregular chop
-        float rip=fbm(p*0.12-vec2(t*0.9,t*0.7))*1.1;                        // fine ripples
-        return big+mid+rip;
+        // slow, large-scale swell: noise-based (NOT sine) so no grid interference forms
+        float big = fbm(p*0.006 + vec2(t*0.05,-t*0.04), 0.6) * 7.0;
+        float mid = fbm(p*0.03  + vec2(t*0.35,-t*0.28), 1.3) * 4.5;
+        float rip = fbm(p*0.12  - vec2(t*0.9, t*0.7),  2.1) * 1.1;
+        // slow scalar that breathes the overall choppiness up and down over ~40s,
+        // so the sea has calmer and rougher stretches rather than one fixed mood
+        float mood = 0.7 + 0.5*vnoise(vec2(t*0.025, 3.7));
+        return (big*0.6 + mid + rip) * mood;
       }
       void main(){
         vec3 pos=position;
@@ -207,12 +217,14 @@ let sea;
         vec3 N=normalize(nrm);
         vec3 V=normalize(camPos-wp);
         vec3 L=normalize(moonPos-wp);
-        // specular glint from the moon on the wave facets -> natural, uneven sparkle
+        // specular glint from the moon on the wave facets -> natural, uneven sparkle.
+        // exponent itself is perturbed per-fragment so highlights don't align into a grid
         vec3 Hh=normalize(L+V);
-        float spec=pow(max(dot(N,Hh),0.0),120.0);
+        float spread = 90.0 + 60.0*fract(sin(dot(wp.xz*0.7,vec2(41.3,7.1)))*4131.7);
+        float spec=pow(max(dot(N,Hh),0.0),spread);
         // reflection column: stronger where waves face the moon, along the moon azimuth
         float col2=exp(-pow((wp.x-moonPos.x*0.12)*0.010,2.0));
-        col+=moonCol*spec*(0.6+0.8*col2);
+        col+=moonCol*spec*(0.55+0.75*col2);
         // subtle fresnel sky tint at grazing angles
         float fr=pow(1.0-max(dot(N,V),0.0),4.0);
         col+=vec3(0.10,0.16,0.22)*fr;
