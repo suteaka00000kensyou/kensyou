@@ -71,11 +71,20 @@ const MOONPOS=new THREE.Vector3(-780,430,-1050);
     transparent:true,opacity:0.4,depthWrite:false,blending:THREE.AdditiveBlending,
     map:(()=>{const cv=document.createElement('canvas');cv.width=cv.height=256;
       const x=cv.getContext('2d');const gr=x.createRadialGradient(128,128,0,128,128,128);
-      gr.addColorStop(0,'rgba(255,226,140,0.9)');gr.addColorStop(0.25,'rgba(255,214,120,0.45)');
+      gr.addColorStop(0,'rgba(255,240,190,1.0)');gr.addColorStop(0.22,'rgba(255,226,150,0.6)');
       gr.addColorStop(1,'rgba(255,244,214,0)');
       x.fillStyle=gr;x.fillRect(0,0,256,256);return new THREE.CanvasTexture(cv);})()
   }));
-  halo.scale.set(760,760,1);halo.position.copy(MOONPOS);scene.add(halo);
+  halo.scale.set(920,920,1);halo.position.copy(MOONPOS);scene.add(halo);
+  const core=new THREE.Sprite(new THREE.SpriteMaterial({
+    transparent:true,opacity:0.7,depthWrite:false,blending:THREE.AdditiveBlending,
+    map:(()=>{const cv=document.createElement('canvas');cv.width=cv.height=128;
+      const x=cv.getContext('2d');const g2=x.createRadialGradient(64,64,0,64,64,64);
+      g2.addColorStop(0,'rgba(255,248,220,0.95)');g2.addColorStop(0.5,'rgba(255,236,170,0.4)');
+      g2.addColorStop(1,'rgba(255,236,170,0)');
+      x.fillStyle=g2;x.fillRect(0,0,128,128);return new THREE.CanvasTexture(cv);})()
+  }));
+  core.scale.set(230,230,1);core.position.copy(MOONPOS);scene.add(core);
 
   // build a large-canvas colour map + matching bump map so craters actually catch light
   const SZ=1024;
@@ -129,9 +138,10 @@ const MOONPOS=new THREE.Vector3(-780,430,-1050);
 
   const moonMat=new THREE.MeshStandardMaterial({
     map:colTex,bumpMap:bumpTex,bumpScale:1.5,
-    color:0xffe08a,                        // golden tint
-    emissive:0xffcf66,emissiveIntensity:0.55,   // gentle self-glow so the face is never dark
-    roughness:0.9,metalness:0.0
+    color:0xfff0c0,                        // bright warm cream
+    emissive:0xffe38a,emissiveIntensity:1.15,   // strong self-glow -> clearly luminous
+    roughness:0.9,metalness:0.0,
+    toneMapped:false                        // keep it from being dimmed by tone mapping
   });
   const moon=new THREE.Mesh(new THREE.SphereGeometry(52,96,96),moonMat);
   moon.position.copy(MOONPOS);
@@ -139,7 +149,7 @@ const MOONPOS=new THREE.Vector3(-780,430,-1050);
   scene.add(moon);
 
   // the moon needs its OWN light so it shows real terminator/shading regardless of scene light angle
-  const moonKey=new THREE.DirectionalLight(0xffdd88,2.6);  // brighter warm key
+  const moonKey=new THREE.DirectionalLight(0xfff0b0,3.4);  // strong warm key
   moonKey.position.set(MOONPOS.x+120,MOONPOS.y+90,MOONPOS.z+700);  // more head-on so the face is bright, slight offset keeps relief
   moonKey.target.position.copy(MOONPOS);
   scene.add(moonKey,moonKey.target);
@@ -307,7 +317,7 @@ new GLTFLoader().load('lighthouse.glb',
     // warm point light at the lantern so it casts light onto the sea & gallery
     const top=new THREE.Box3().setFromObject(root).max.y;
     const lamp=new THREE.PointLight(0xffe6a8,3.4,900,1.6);
-    lamp.position.set(0,top*0.82,0);scene.add(lamp);
+    lamp.position.set(0,top*0.72,0);scene.add(lamp);
 
     /* ---------- rotating light beams from the lantern ---------- */
     const beamMat=new THREE.MeshBasicMaterial({
@@ -327,7 +337,7 @@ new GLTFLoader().load('lighthouse.glb',
       arm.rotation.y=i*Math.PI;             // two opposite beams
       beams.add(arm);
     }
-    beams.position.set(0,top*0.82,0);
+    beams.position.set(0,top*0.72,0);   // at the lantern-glass level
     scene.add(beams);
     window.__beams=beams;                    // let the animation loop spin it
   },
