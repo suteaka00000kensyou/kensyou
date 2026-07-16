@@ -343,7 +343,7 @@ function startSea(){
   audio.play().catch(()=>{});
 
   // fade the <audio> element's own volume in gently (simplest, most robust path)
-  const target = 0.55;
+  const target = 0.30;   // lowered so bird calls stand out
   const steps = 40, stepTime = 3000/steps;
   let i = 0;
   const fade = setInterval(() => {
